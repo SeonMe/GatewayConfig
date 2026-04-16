@@ -1,0 +1,16 @@
+source /etc/network/interfaces.d/*
+
+# The loopback network interface
+auto lo
+iface lo inet loopback
+
+# The primary network interface
+allow-hotplug enp1s0
+iface enp1s0 inet static
+    address 10.0.0.2/24
+    gateway 10.0.0.1
+    # --- 网卡传输队列 ---
+    post-up /sbin/ip link set enp1s0 txqueuelen 50000
+    # --- 流量控制与排队规则 ---
+    # 应用 FQ (Fair Queuing) 调度算法，并精细化配置数据包限制与量子参数（优化大带宽下的吞吐与延迟）
+    post-up /sbin/tc qdisc replace dev enp1s0 root fq limit 65535 flow_limit 3000 quantum 3028 initial_quantum 15140

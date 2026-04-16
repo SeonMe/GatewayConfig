@@ -1,0 +1,124 @@
+global {
+  ##### Software options
+  tproxy_port: 12345
+  tproxy_port_protect: true
+  pprof_port: 0
+  so_mark_from_dae: 0
+  # Log level: error, warn, info, debug, trace
+  log_level: warn
+
+  ##### Interface and kernel options
+  lan_interface: enp1s0
+  wan_interface: auto
+  auto_config_kernel_parameter: true
+
+  ##### Node connectivity check
+  tcp_check_url: 'http://cp.cloudflare.com,1.1.1.1,2606:4700:4700::1111'
+  tcp_check_http_method: HEAD
+  udp_check_dns: 'dns.google:53,8.8.8.8,2001:4860:4860::8888'
+  check_interval: 30s
+  check_tolerance: 50ms
+
+  ##### Connecting options
+  dial_mode: domain
+  allow_insecure: false
+  sniffing_timeout: 100ms
+  tls_implementation: tls
+  utls_imitate: chrome_auto
+  tls_fragment: false
+  tls_fragment_length: '50-100'
+  tls_fragment_interval: '10-20'
+  #fallback_resolver: '8.8.8.8:53'
+}
+
+node {
+  demo: 'hysteria2://passwd@127.0.0.1:443/?sni=domain'
+}
+
+dns {
+  upstream {
+    mosdns: 'tcp+udp://127.0.0.1:5333'
+  }
+  routing {
+    request {
+      fallback: mosdns
+    }
+  }
+}
+
+group {
+  Proxy {
+    policy: min
+  }
+}
+
+routing {
+  ### Preset rules
+  pname(mosdns) && l4proto(udp) && dport(5333) -> direct(must)
+  dip(224.0.0.0/3, 'ff00::/8') -> direct(must)
+  dip(10.0.0.0/24, 'fe10::/64') -> direct
+
+  ### AdGuardHome
+  sip(10.0.0.4) && l4proto(udp) && dport(53) -> direct
+
+  ### ZeroTier
+  sip(10.0.0.3, 'fe10::3') -> direct
+  dip(10.10.0.0/24) -> direct
+  sip(10.10.0.0/24) -> direct
+
+  ### Node
+  dip(127.0.0.1) -> direct
+  domain(suffix: hooooo.shop) -> direct
+
+  ### DNS
+  ## Google
+  domain(full: dns.google) -> Proxy
+  dip(8.8.8.8) -> Proxy
+  dip(8.8.4.4) -> Proxy
+  ## Cloudflare
+  domain(full: cloudflare-dns.com) -> Proxy
+  domain(full: one.one.one.one) -> Proxy
+  dip(1.1.1.1) -> Proxy
+  dip(1.0.0.1) -> Proxy
+  ## Ali
+  domain(full: dns.alidns.com) -> direct
+  dip(223.5.5.5) -> direct
+  dip(223.6.6.6) -> direct
+  dip('2400:3200::1') -> direct
+  dip('2400:3200:baba::1') -> direct
+  ## dnspod
+  domain(full: doh.pub) -> direct
+  domain(full: dot.pub) -> direct
+  dip(119.29.29.29) -> direct
+  dip('2402:4e00::') -> direct
+
+  ### Custom Rules
+  ## 腾讯
+  domain(geosite:tencent) -> direct
+  ## 字节跳动
+  domain(geosite:bytedance) -> direct
+  ## 哔哩哔哩
+  domain(geosite:bilibili) -> direct
+  ## 爱奇艺
+  domain(geosite:iqiyi) -> direct
+  ## 优酷
+  domain(geosite:youku) -> direct
+
+  ## Spotify
+  domain(geosite:spotify) -> Proxy
+  ## Apple
+  domain(geosite:apple-cn) -> direct
+
+  ### Default Rules
+  dip(geoip:private) -> direct
+  dscp(0x4) -> direct
+  domain(geosite:cn) -> direct
+  domain(geosite:gfw) -> Proxy
+  dip(geoip:cn) -> direct
+
+  ### QUIC Block
+  l4proto(udp) && dport(443) -> block
+
+  ### Other
+  fallback: Proxy
+}
