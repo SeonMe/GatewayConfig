@@ -34,15 +34,15 @@ add action=mark-routing chain=prerouting comment=Gateway dst-address=!$IPv6_LAN 
 
 ## Route
 /ip route
-add comment=Gateway-PPPOE disabled=no distance=1 dst-address=0.0.0.0/0 gateway=$PPPOE_NAME routing-table=bypass scope=30 target-scope=10
+add comment=Gateway-PPPoE disabled=no distance=1 dst-address=0.0.0.0/0 gateway=$PPPOE_NAME routing-table=bypass scope=30 target-scope=10
 add comment=Gateway-LAN disabled=no distance=1 dst-address=$IPv4_LAN gateway=$LAN_NAME routing-table=bypass scope=30 target-scope=10
 add comment=Gateway-INT dst-address=$INT_IP gateway=$PPPOE_NAME routing-table=bypass
 /ipv6 route
-add comment=Gateway-PPPOE disabled=no distance=1 dst-address=::/0 gateway=$PPPOE_NAME routing-table=bypass scope=10 target-scope=5
+add comment=Gateway-PPPoE disabled=no distance=1 dst-address=::/0 gateway=$PPPOE_NAME routing-table=bypass scope=10 target-scope=5
 add comment=Gateway-INT dst-address=$INT_IPv6 gateway=$PPPOE_NAME routing-table=bypass
-add comment=Gateway-LAN disabled=no distance=1 dst-address=$IPv6_LAN gateway=$LAN_NAME routing-table=bypass scope=10 target-scope=5
-add comment=Gateway-LOCAL disabled=no distance=1 dst-address=fe80::/64 gateway=$LAN_NAME routing-table=bypass scope=10 target-scope=5
-add comment=Gateway-LOCAL-PPPOE disabled=no distance=1 dst-address=fe80::/64 gateway=$PPPOE_NAME routing-table=bypass scope=10 target-scope=5
+add comment=Gateway-ULA disabled=no distance=1 dst-address=$IPv6_LAN gateway=$LAN_NAME routing-table=bypass scope=10 target-scope=5
+add comment=Gateway-LLA-LAN disabled=no distance=1 dst-address=fe80::/64 gateway=$LAN_NAME routing-table=bypass scope=10 target-scope=5
+add comment=Gateway-LLA-PPPoE disabled=no distance=1 dst-address=fe80::/64 gateway=$PPPOE_NAME routing-table=bypass scope=10 target-scope=5
 
 
 ## ZeroTier
