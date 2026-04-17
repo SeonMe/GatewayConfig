@@ -1,5 +1,4 @@
 plugins:
-  ################ DNS #################
   # google
   - tag: google
     type: forward
@@ -58,6 +57,15 @@ plugins:
     args:
       concurrent: 2
       upstreams:
+        # DoQ
+        - addr: "quic://dns.alidns.com"
+          dial_addr: "223.5.5.5"
+        - addr: "quic://dns.alidns.com"
+          dial_addr: "223.6.6.6"
+        - addr: "quic://dns.alidns.com"
+          dial_addr: "2400:3200::1"
+        - addr: "quic://dns.alidns.com"
+          dial_addr: "2400:3200:baba::1"
         # DoH
         - addr: "https://dns.alidns.com/dns-query"
           dial_addr: "223.5.5.5"
