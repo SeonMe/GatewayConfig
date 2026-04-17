@@ -1,23 +1,20 @@
 ## Local Variable
-## 这部分需要自行修改
-# 1.如果您未配置 ND ，IPv6_LAN 默认是 fe80::/64，可自行 /ipv6 route print 查看
-# 2.如果您配置了 ND ，IPv6本地地址通常自行设置，如有请在 /ipv6 route 自行添加一条 Gateway-LAN
-# 3.其他的可自行修改及配置
-:local ROS_IP "10.0.0.1"
+## IPv6 使用的 DHCPv6 + ULA 方案，非 SLAAC GUA+ULA 方案，即局域网设备 IPv6 地址仅有 ULA 地址。
+:local LAN_IP "10.0.0.1"
+:local LAN_NAME "Bridge"
 :local IPv4_LAN "10.0.0.0/24"
-:local IPv6_LAN "fe80::/64"
+:local IPv6_LAN "fd00::/64"
 :local Gateway_MAC "6E:6E:6E:6E:6E:6E"
 :local INT_IPv4 "114.114.114.114"
 :local INT_IPv6 "2400::/64"
-:local LAN_NAME "Bridge"
 :local PPPOE_NAME "pppoe-out1"
 
 ## OSPF
 /routing id
-add comment=Gateway disabled=no id=$ROS_IP name=Gateway select-dynamic-id=only-vrf
+add comment=Gateway disabled=no id=$LAN_IP name=Gateway select-dynamic-id=only-vrf
 /routing ospf instance
-add comment=Gateway disabled=no name=ipv4 router-id=$ROS_IP version=2
-add comment=Gateway disabled=no name=ipv6 router-id=$ROS_IP version=3
+add comment=Gateway disabled=no name=ipv4 router-id=$LAN_IP version=2
+add comment=Gateway disabled=no name=ipv6 router-id=$LAN_IP version=3
 /routing ospf area
 add comment=Gateway disabled=no instance=ipv4 name=ipv4
 add comment=Gateway disabled=no instance=ipv6 name=ipv6
@@ -37,18 +34,21 @@ add action=mark-routing chain=prerouting comment=Gateway dst-address=!$IPv6_LAN 
 
 ## Route
 /ip route
-add comment=Gateway-LAN disabled=no distance=1 dst-address=$IPv4_LAN gateway=$LAN_NAME routing-table=bypass scope=30 target-scope=10
 add comment=Gateway-PPPOE disabled=no distance=1 dst-address=0.0.0.0/0 gateway=$PPPOE_NAME routing-table=bypass scope=30 target-scope=10
+add comment=Gateway-LAN disabled=no distance=1 dst-address=$IPv4_LAN gateway=$LAN_NAME routing-table=bypass scope=30 target-scope=10
 add comment=Gateway-INT dst-address=$INT_IP gateway=$PPPOE_NAME routing-table=bypass
 /ipv6 route
-add comment=Gateway-LAN disabled=no distance=1 dst-address=$IPv6_LAN gateway=$LAN_NAME routing-table=bypass scope=10 target-scope=5
-add comment=Gateway-PPPOE disabled=no distance=1 dst-address=$IPv6_LAN gateway=$PPPOE_NAME routing-table=bypass scope=10 target-scope=5
+add comment=Gateway-PPPOE disabled=no distance=1 dst-address=::/0 gateway=$PPPOE_NAME routing-table=bypass scope=10 target-scope=5
 add comment=Gateway-INT dst-address=$INT_IPv6 gateway=$PPPOE_NAME routing-table=bypass
+add comment=Gateway-LAN disabled=no distance=1 dst-address=$IPv6_LAN gateway=$LAN_NAME routing-table=bypass scope=10 target-scope=5
+add comment=Gateway-LOCAL disabled=no distance=1 dst-address=fe80::/64 gateway=$LAN_NAME routing-table=bypass scope=10 target-scope=5
+add comment=Gateway-LOCAL-PPPOE disabled=no distance=1 dst-address=fe80::/64 gateway=$PPPOE_NAME routing-table=bypass scope=10 target-scope=5
+
 
 ## ZeroTier
-# 1.如果您使用 ZeroTier，请如下配置
 :local ZT_Server_IP "10.10.0.1"
 :local ZT_LAN "10.10.0.0/24"
+:local LAN_NAME "Bridge"
 
 /routing table
 add comment=ZeroTier disabled=no fib name=zerotier

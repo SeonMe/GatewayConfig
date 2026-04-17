@@ -1,41 +1,44 @@
 log:
-  level: warn # 日志级别。可选 "debug" "info" "warn" "error"。默认 "info"
+  level: warn
   file: "/var/log/mosdns.log"
 
+api:
+  http: "0.0.0.0:8338" # api 监听地址
+
 include:
-  - "/etc/mosdns/dat_exec.yaml" # geoip及geosite集
-  - "/etc/mosdns/dns.yaml" # dns配置
+  - "/etc/mosdns/dat_exec.yaml"
+  - "/etc/mosdns/dns.yaml"
 
 plugins:
-  - tag: reject_null_domain # 拒绝空域名查询
+  - tag: reject_null_domain
     type: sequence
     args:
-      - exec: query_summary reject_null_domain 
+      - exec: query_summary reject_null_domain
       - exec: $reject_3
 
   - tag: reject_qtype65
     type: sequence
     args:
-      - exec: query_summary reject_qtype65 # 拒绝 HTTPS/SVCB 记录
+      - exec: query_summary reject_qtype65
       - exec: $reject_3
 
   ################ 序列 #################
-  # dns_nocn序列
+  # dns-nocn 序列
   - tag: dns_nocn
-    type: fallback
+    type: "fallback"
     args:
       primary: google # 主dns
       secondary: cloudflare # 备用dns
-      threshold: 600 # 无响应切换 毫秒
+      threshold: 2000 # 无响应切换 毫秒
       always_standby: true # 副可执行插件始终待命
 
   # dns-cn 序列
   - tag: dns_cn
-    type: fallback
+    type: "fallback"
     args:
       primary: ali # 主dns
       secondary: dnspod # 备用dns
-      threshold: 600
+      threshold: 2000
       always_standby: true # 副可执行插件始终待命
 
   - tag: dns_nocn_seq
@@ -84,6 +87,9 @@ plugins:
   - tag: query_nocn
     type: sequence
     args:
+      # 如果你的节点支持 IPv6 ，需要注释
+      - matches: qtype 28
+        exec: reject 3
       - exec: $no_ecs
       - exec: $dns_nocn_seq
       # 丢弃 CN IP 及已知污染 IP 响应
@@ -94,6 +100,9 @@ plugins:
   - tag: query_fallback
     type: sequence
     args:
+      # 如果你的节点支持 IPv6 ，需要注释
+      - matches: qtype 28
+        exec: reject 3
       - exec: $no_ecs
       - exec: $fallback_seq
       # 丢弃 CN IP 及已知污染 IP 响应
@@ -181,11 +190,7 @@ plugins:
       - matches: qname $geosite_cn
         exec: $query_cn
       - exec: jump has_resp_main
-      # 5. 灰名单 （判断）
-      - matches: qname $greylist
-        exec: $query_fallback
-      - exec: jump has_resp_main
-      # 6. Fallback (未知域名，严格走国外)
+      # 5. Fallback (未知域名，严格走国外)
       - exec: $no_ecs
       - exec: $query_fallback
       - exec: jump has_resp_main
