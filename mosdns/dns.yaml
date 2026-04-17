@@ -4,29 +4,19 @@ plugins:
   - tag: google
     type: forward
     args:
-      concurrent: 3
+      concurrent: 2
       upstreams:
         # DoH
         - addr: "https://dns.google/dns-query"
           dial_addr: "8.8.8.8"
         - addr: "https://dns.google/dns-query"
           dial_addr: "8.8.4.4"
-        - addr: "https://dns.google/dns-query"
-          dial_addr: "2001:4860:4860::8888"
-        - addr: "https://dns.google/dns-query"
-          dial_addr: "2001:4860:4860::8844"
         # DoT
         - addr: "tls://dns.google"
           dial_addr: "8.8.8.8"
           enable_pipeline: true
         - addr: "tls://dns.google"
           dial_addr: "8.8.4.4"
-          enable_pipeline: true
-        - addr: "tls://dns.google"
-          dial_addr: "2001:4860:4860::8888"
-          enable_pipeline: true
-        - addr: "tls://dns.google"
-          dial_addr: "2001:4860:4860::8844"
           enable_pipeline: true
         # H3
         - addr: "https://dns.google/dns-query"
@@ -35,18 +25,12 @@ plugins:
         - addr: "https://dns.google/dns-query"
           dial_addr: "8.8.4.4"
           enable_http3: true
-        - addr: "https://dns.google/dns-query"
-          dial_addr: "2001:4860:4860::8888"
-          enable_http3: true
-        - addr: "https://dns.google/dns-query"
-          dial_addr: "2001:4860:4860::8844"
-          enable_http3: true
 
   # cloudflare
   - tag: cloudflare
     type: forward
     args:
-      concurrent: 3
+      concurrent: 2
       upstreams:
         # DoH
         - addr: "https://cloudflare-dns.com/dns-query"
@@ -72,7 +56,7 @@ plugins:
   - tag: ali
     type: forward
     args:
-      concurrent: 3
+      concurrent: 2
       upstreams:
         # DoH
         - addr: "https://dns.alidns.com/dns-query"
@@ -114,7 +98,7 @@ plugins:
   - tag: dnspod
     type: forward
     args:
-      concurrent: 3
+      concurrent: 2
       upstreams:
         # DoH
         - addr: "https://doh.pub/dns-query"

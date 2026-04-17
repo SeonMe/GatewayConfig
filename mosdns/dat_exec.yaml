@@ -1,43 +1,40 @@
 plugins:
-  ################## 数据源 ################
-  - tag: geoip_private # 私网 ip
+  # 私网 IP
+  - tag: geoip_private
     type: ip_set
     args:
       files:
         - "/etc/mosdns/geodat/geoip_private.txt"
-  - tag: geoip_cn # cn ip
+  # cn ip
+  - tag: geoip_cn
     type: ip_set
     args:
       files:
         - "/etc/mosdns/geodat/geoip_cn.txt"
-
-  - tag: geosite_cn # cn 域名
+  # cn 域名
+  - tag: geosite_cn
     type: domain_set
     args:
       files:
         - "/etc/mosdns/geodat/geosite_cn.txt"
-  - tag: whitelist # 白名单
+  # 白名单
+  - tag: whitelist
     type: domain_set
     args:
       files:
         - "/etc/mosdns/rule/whitelist.txt"
-  - tag: geosite_gfw # gfw 域名
+  # gfw 域名
+  - tag: geosite_gfw
     type: domain_set
     args:
       files:
         - "/etc/mosdns/geodat/geosite_gfw.txt"
-  - tag: geosite_location-nocn # 非 cn 域名
+  # 非 cn 域名
+  - tag: geosite_location-nocn
     type: domain_set
     args:
       files:
         - "/etc/mosdns/geodat/geosite_geolocation-nocn.txt"
-  - tag: geosite_ads-all # 广告域名
-    type: domain_set
-    args:
-      files:
-        - "/etc/mosdns/geodat/geosite_category-ads-all.txt"
-
-  ################# 可执行插件 ################
 
   # 缓存 lan
   - tag: cache_lan
@@ -56,9 +53,9 @@ plugins:
   - tag: no_ecs
     type: "ecs_handler"
     args:
-      forward: false # 是否转发来自下游的 ecs
-      #preset: "" # 发送预设 ecs
-      send: false # 是否发送 ecs
+      forward: false
+      #preset: ""
+      send: false
       mask4: 24
       mask6: 48
 
@@ -66,11 +63,11 @@ plugins:
   - tag: ecs_cn
     type: "ecs_handler"
     args:
-      forward: false # 是否转发来自下游的 ecs
-      #preset: "" # 发送预设 ecs
-      send: false # 是否发送 ecs
-      mask4: 24 # ipv4 掩码。默认 24
-      mask6: 48 # ipv6 掩码。默认 48
+      forward: false
+      #preset: "" 
+      send: true
+      mask4: 24
+      mask6: 48
 
   # 调整 ttl
   - tag: ttl_1m

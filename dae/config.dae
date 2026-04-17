@@ -52,47 +52,33 @@ group {
   }
 }
 
-routing {
+rrouting {
   ### Preset rules
   pname(mosdns) && l4proto(udp) && dport(5333) -> direct(must)
   dip(224.0.0.0/3, 'ff00::/8') -> direct(must)
+  sip(10.0.0.4) && l4proto(udp) && dport(53) -> direct
+  l4proto(icmp) -> direct
+  l4proto(icmp6) -> direct
+  l4proto(udp) && dport(33434-33534) -> direct
+
+
+  ### Private rules
+  dip(geoip:private) -> direct
   dip(10.0.0.0/24, 'fe10::/64') -> direct
 
-  ### AdGuardHome
-  sip(10.0.0.4) && l4proto(udp) && dport(53) -> direct
-
-  ### ZeroTier
+  ### ZeroTier rules
   sip(10.0.0.3, 'fe10::3') -> direct
   dip(10.10.0.0/24) -> direct
   sip(10.10.0.0/24) -> direct
 
+  ### BT/PT
+  dscp(0x4) -> direct
+
   ### Node
   dip(127.0.0.1) -> direct
-  domain(suffix: hooooo.shop) -> direct
+  domain(suffix: domain) -> direct
 
-  ### DNS
-  ## Google
-  domain(full: dns.google) -> Proxy
-  dip(8.8.8.8) -> Proxy
-  dip(8.8.4.4) -> Proxy
-  ## Cloudflare
-  domain(full: cloudflare-dns.com) -> Proxy
-  domain(full: one.one.one.one) -> Proxy
-  dip(1.1.1.1) -> Proxy
-  dip(1.0.0.1) -> Proxy
-  ## Ali
-  domain(full: dns.alidns.com) -> direct
-  dip(223.5.5.5) -> direct
-  dip(223.6.6.6) -> direct
-  dip('2400:3200::1') -> direct
-  dip('2400:3200:baba::1') -> direct
-  ## dnspod
-  domain(full: doh.pub) -> direct
-  domain(full: dot.pub) -> direct
-  dip(119.29.29.29) -> direct
-  dip('2402:4e00::') -> direct
-
-  ### Custom Rules
+  ### Custom Rules CN
   ## 腾讯
   domain(geosite:tencent) -> direct
   ## 字节跳动
@@ -103,22 +89,48 @@ routing {
   domain(geosite:iqiyi) -> direct
   ## 优酷
   domain(geosite:youku) -> direct
-
-  ## Spotify
-  domain(geosite:spotify) -> Proxy
-  ## Apple
+  ## Apple CN
+  domain(geosite:apple-cn) -> direct
+  ## Apple 国内服务
   domain(geosite:apple-cn) -> direct
 
-  ### Default Rules
-  dip(geoip:private) -> direct
-  dscp(0x4) -> direct
-  domain(geosite:cn) -> direct
-  domain(geosite:gfw) -> Proxy
-  dip(geoip:cn) -> direct
+  ### DNS
+  ## Ali
+  domain(suffix: dns.alidns.com) -> direct
+  dip(223.5.5.5) -> direct
+  dip(223.6.6.6) -> direct
+  dip('2400:3200::1') -> direct
+  dip('2400:3200:baba::1') -> direct
+  ## dnspod
+  domain(suffix: doh.pub) -> direct
+  domain(suffix: dot.pub) -> direct
+  dip(119.29.29.29) -> direct
+  dip('2402:4e00::') -> direct
+  ## Google
+  domain(suffix: dns.google) -> Proxy
+  dip(8.8.8.8) -> Proxy
+  dip(8.8.4.4) -> Proxy
+  ## Cloudflare
+  domain(suffix: cloudflare-dns.com) -> Proxy
+  domain(suffix: one.one.one.one) -> Proxy
+  dip(1.1.1.1) -> Proxy
+  dip(1.0.0.1) -> Proxy
 
   ### QUIC Block
   l4proto(udp) && dport(443) -> block
 
-  ### Other
+  ## Custom Rules NoCN
+  ## Spotify
+  domain(geosite:spotify) -> Proxy
+
+  ## Other
+  domain(geosite:gfw) -> Proxy
+  domain(geosite:cn) && !dip(geoip:cn) -> Proxy
+
+  ### Default
+  domain(geosite:cn) -> direct
+  dip(geoip:cn) -> direct
+
+  ### Fallback
   fallback: Proxy
 }
