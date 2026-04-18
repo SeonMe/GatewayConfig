@@ -5,7 +5,7 @@ global {
   pprof_port: 0
   so_mark_from_dae: 0
   # Log level: error, warn, info, debug, trace
-  log_level: warn
+  log_level: error
 
   ##### Interface and kernel options
   lan_interface: enp1s0
@@ -26,13 +26,11 @@ global {
   tls_implementation: tls
   utls_imitate: chrome_auto
   tls_fragment: false
-  tls_fragment_length: '50-100'
-  tls_fragment_interval: '10-20'
-  #fallback_resolver: '8.8.8.8:53'
+
 }
 
 node {
-  demo: 'hysteria2://passwd@127.0.0.1:443/?sni=domain'
+  hk: 'hysteria2://passwd@127.0.0.1:443/?sni=domain'
 }
 
 dns {
@@ -79,7 +77,7 @@ routing {
 
   ## Proxy rules
   domain(geosite:gfw) -> Proxy
-  #domain(geosite:cn) && !dip(geoip:cn) -> Proxy
+  domain(geosite:cn) && !dip(geoip:cn) -> Proxy
 
   ### Custom Rules CN
   ## 腾讯

@@ -1,6 +1,6 @@
 # 日志配置
 log:
-  level: error
+  level: info
   file: "/var/log/mosdns.log"
 
 # API 服务配置
@@ -35,7 +35,7 @@ plugins:
       primary: google
       secondary: cloudflare
       threshold: 500
-      always_standby: false
+      always_standby: true
 
   # 国内 DNS 组
   - tag: dns_cn
@@ -44,7 +44,7 @@ plugins:
       primary: ali
       secondary: dnspod
       threshold: 300
-      always_standby: false
+      always_standby: true
 
   # 国外 DNS 序列
   - tag: dns_nocn_seq
@@ -81,15 +81,6 @@ plugins:
       - exec: query_summary other
       - exec: $dns_cn
 
-  # 处理国内域名
-  - tag: query_cn
-    type: sequence
-    args:
-      - exec: $ecs_cn
-      - exec: $dns_cn_seq
-      - matches: "resp_ip 61.160.148.90/24 221.228.32.13/24 114.237.67.59/24 117.69.71.58/24 180.109.0.0/16 4.36.66.178 8.7.198.45 37.61.54.158 46.82.174.68 59.24.3.173 64.33.88.161 78.16.49.15 93.46.8.89 159.106.121.75 202.106.1.2 202.181.7.85 203.161.230.171 209.145.54.50 211.94.66.147 216.234.179.13 243.185.187.39"
-        exec: drop_resp
-
   # 处理国外域名
   - tag: query_nocn
     type: sequence
@@ -98,10 +89,27 @@ plugins:
         exec: reject 3
       - exec: $no_ecs
       - exec: $dns_nocn_seq
-      - matches: "resp_ip $geoip_cn 61.160.148.90/24 221.228.32.13/24 114.237.67.59/24 117.69.71.58/24 180.109.0.0/16 4.36.66.178 8.7.198.45 37.61.54.158 46.82.174.68 59.24.3.173 64.33.88.161 78.16.49.15 93.46.8.89 159.106.121.75 202.106.1.2 202.181.7.85 203.161.230.171 209.145.54.50 211.94.66.147 216.234.179.13 243.185.187.39"
-        exec: drop_resp
 
-  # fallback 查询
+  # 国内查询验证序列
+  - tag: query_cn_smart
+    type: sequence
+    args:
+      - matches: resp_ip $geoip_cn
+        exec: accept
+      - exec: goto query_nocn
+
+  # 处理国内域名
+  - tag: query_cn
+    type: sequence
+    args:
+      - exec: $cache_wan
+      - matches: has_resp
+        exec: return
+      - exec: $ecs_cn
+      - exec: $dns_cn_seq
+      - exec: goto query_cn_smart
+
+  # fallback 查询（用于未知域名）
   - tag: query_fallback
     type: sequence
     args:
@@ -109,8 +117,6 @@ plugins:
         exec: reject 3
       - exec: $no_ecs
       - exec: $fallback_seq
-      - matches: "resp_ip $geoip_cn 61.160.148.90/24 221.228.32.13/24 114.237.67.59/24 117.69.71.58/24 180.109.0.0/16 4.36.66.178 8.7.198.45 37.61.54.158 46.82.174.68 59.24.3.173 64.33.88.161 78.16.49.15 93.46.8.89 159.106.121.75 202.106.1.2 202.181.7.85 203.161.230.171 209.145.54.50 211.94.66.147 216.234.179.13 243.185.187.39"
-        exec: drop_resp
 
   # 处理局域网域名（含内网 PTR）
   - tag: query_lan
@@ -149,35 +155,20 @@ plugins:
         exec: accept
       - exec: reject 3
 
-  # 预处理结果处理（加入反向记录）
-  - tag: pre_handle
-    type: sequence
-    args:
-      - exec: $ttl_1h
-      - exec: $reverse_db
-      - exec: accept
-
-  # 主流程结果处理（加入反向记录）
-  - tag: main_handle
+  # 最终响应处理器（统一处理反向记录和 TTL）
+  - tag: final_handle
     type: sequence
     args:
       - exec: $ttl_5m
       - exec: $reverse_db
       - exec: accept
 
-  # 预处理有响应时跳转
-  - tag: has_resp_pre
-    type: sequence
-    args:
-      - matches: has_resp
-        exec: goto pre_handle
-
-  # 主流程有响应时跳转
+  # 主流程有响应时跳转至最终处理器
   - tag: has_resp_main
     type: sequence
     args:
       - matches: has_resp
-        exec: goto main_handle
+        exec: goto final_handle
 
   # 预处理序列
   - tag: pre_sequence
@@ -191,26 +182,30 @@ plugins:
         exec: $query_ptr
       - matches: qtype 255
         exec: $query_other
-      - exec: jump has_resp_pre
 
-  # 主解析序列
+  # 主解析序列（顺序：缓存 -> 分流 -> 查询 -> 验证）
   - tag: main_sequence
     type: sequence
     args:
       - exec: $cache_wan
       - exec: jump has_resp_main
+
       - matches: qname $geosite_gfw
-        exec: $query_nocn
+        exec: goto query_nocn
       - exec: jump has_resp_main
+      
       - matches: qname $whitelist
-        exec: $query_cn
+        exec: goto query_cn
       - exec: jump has_resp_main
+      
       - matches: qname $geosite_location-nocn
-        exec: $query_nocn
+        exec: goto query_nocn
       - exec: jump has_resp_main
+      
       - matches: qname $geosite_cn
-        exec: $query_cn
+        exec: goto query_cn
       - exec: jump has_resp_main
+
       - exec: $no_ecs
       - exec: $query_fallback
       - exec: jump has_resp_main

@@ -65,7 +65,7 @@ plugins:
     type: "ecs_handler"
     args:
       forward: false
-      #preset: "" 
+      #preset: ""
       send: true
       mask4: 24
       mask6: 48
