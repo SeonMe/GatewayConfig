@@ -42,6 +42,7 @@ plugins:
     args:
       size: 8192
       lazy_cache_ttl: 86400
+
   # 缓存 wan
   - tag: cache_wan
     type: cache

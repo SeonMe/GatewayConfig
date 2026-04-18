@@ -1,6 +1,6 @@
 # 日志配置
 log:
-  level: warn
+  level: error
   file: "/var/log/mosdns.log"
 
 # API 服务配置
@@ -25,7 +25,8 @@ plugins:
     type: sequence
     args:
       - exec: query_summary reject_qtype65
-      - exec: $reject_3
+      - exec: $reject_5
+      - exec: return 
 
   # 国外 DNS 组
   - tag: dns_nocn
@@ -33,7 +34,7 @@ plugins:
     args:
       primary: google
       secondary: cloudflare
-      threshold: 2000
+      threshold: 500
       always_standby: false
 
   # 国内 DNS 组
@@ -42,7 +43,7 @@ plugins:
     args:
       primary: ali
       secondary: dnspod
-      threshold: 2000
+      threshold: 300
       always_standby: false
 
   # 国外 DNS 序列
@@ -99,16 +100,6 @@ plugins:
       - exec: $dns_nocn_seq
       - matches: "resp_ip $geoip_cn 61.160.148.90/24 221.228.32.13/24 114.237.67.59/24 117.69.71.58/24 180.109.0.0/16 4.36.66.178 8.7.198.45 37.61.54.158 46.82.174.68 59.24.3.173 64.33.88.161 78.16.49.15 93.46.8.89 159.106.121.75 202.106.1.2 202.181.7.85 203.161.230.171 209.145.54.50 211.94.66.147 216.234.179.13 243.185.187.39"
         exec: drop_resp
-
-  # 智能国内查询（先国内，若响应IP不在国内则回退国外）
-  - tag: query_cn_smart
-    type: sequence
-    args:
-      - exec: $query_cn
-      - matches: "resp_ip $geoip_cn"
-        exec: accept
-      - exec: $query_nocn
-      - exec: accept
 
   # fallback 查询
   - tag: query_fallback
@@ -218,7 +209,7 @@ plugins:
         exec: $query_nocn
       - exec: jump has_resp_main
       - matches: qname $geosite_cn
-        exec: $query_cn_smart
+        exec: $query_cn
       - exec: jump has_resp_main
       - exec: $no_ecs
       - exec: $query_fallback

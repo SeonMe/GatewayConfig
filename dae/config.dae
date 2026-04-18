@@ -52,7 +52,7 @@ group {
   }
 }
 
-rrouting {
+routing {
   ### Preset rules
   pname(mosdns) && l4proto(udp) && dport(5333) -> direct(must)
   dip(224.0.0.0/3, 'ff00::/8') -> direct(must)
@@ -60,7 +60,6 @@ rrouting {
   l4proto(icmp) -> direct
   l4proto(icmp6) -> direct
   l4proto(udp) && dport(33434-33534) -> direct
-
 
   ### Private rules
   dip(geoip:private) -> direct
@@ -78,6 +77,10 @@ rrouting {
   dip(127.0.0.1) -> direct
   domain(suffix: domain) -> direct
 
+  ## Proxy rules
+  domain(geosite:gfw) -> Proxy
+  #domain(geosite:cn) && !dip(geoip:cn) -> Proxy
+
   ### Custom Rules CN
   ## 腾讯
   domain(geosite:tencent) -> direct
@@ -90,8 +93,6 @@ rrouting {
   ## 优酷
   domain(geosite:youku) -> direct
   ## Apple CN
-  domain(geosite:apple-cn) -> direct
-  ## Apple 国内服务
   domain(geosite:apple-cn) -> direct
 
   ### DNS
@@ -122,10 +123,8 @@ rrouting {
   ## Custom Rules NoCN
   ## Spotify
   domain(geosite:spotify) -> Proxy
-
-  ## Other
-  domain(geosite:gfw) -> Proxy
-  domain(geosite:cn) && !dip(geoip:cn) -> Proxy
+  ## Cloudflare
+  #dip(geoip:cloudflare) -> Proxy
 
   ### Default
   domain(geosite:cn) -> direct
