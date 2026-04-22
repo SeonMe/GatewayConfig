@@ -1,0 +1,110 @@
+name: Update China IP List from All RIRs
+
+on:
+  schedule:
+    # 每天 UTC 时间 02:00 运行（北京时间约 10:00）
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      # 如需自动提交回仓库
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Download delegated files from all RIRs
+        run: |
+          set -euo pipefail
+
+          # 各 RIR 的委派文件 URL（格式统一，由 IANA 规范）
+          URLS=(
+            "https://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest"
+            "https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest"
+            "https://ftp.ripe.net/pub/stats/ripencc/delegated-ripencc-latest"
+            "https://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-latest"
+            "https://ftp.afrinic.net/pub/stats/afrinic/delegated-afrinic-latest"
+          )
+
+          for url in "${URLS[@]}"; do
+            name=$(basename "$url")
+            echo "Downloading $url ..."
+            curl -sSL --retry 3 --fail "$url" -o "$name" || echo "Warning: Failed to download $url"
+          done
+
+          echo "All downloads completed."
+
+      - name: Extract CN entries and generate IP lists
+        run: |
+          set -euo pipefail
+
+          # 临时存放 IPv4 和 IPv6 条目（未去重）
+          IPv4_TMP="ipv4_tmp.txt"
+          IPv6_TMP="ipv6_tmp.txt"
+
+          # 清空临时文件
+          > "$IPv4_TMP"
+          > "$IPv6_TMP"
+
+          # 处理所有下载的 delegated 文件
+          for file in delegated-*-latest; do
+            if [[ ! -f "$file" ]]; then
+              echo "File $file not found, skipping."
+              continue
+            fi
+            echo "Processing $file ..."
+
+            # 提取 IPv4：格式为 注册机构|国家代码|ipv4|起始地址|地址数量|分配日期|状态
+            awk -F'|' '
+              $1 ~ /^(apnic|arin|ripencc|lacnic|afrinic)$/ && $2 == "CN" && $3 == "ipv4" && $5 ~ /^[0-9]+$/ {
+                ip = $4; num = $5;
+                # 计算 CIDR 前缀长度：32 - log2(num)
+                # 使用 awk 内置对数函数计算
+                cidr = 32 - log(num) / log(2);
+                printf "%s/%d\n", ip, cidr;
+              }
+            ' "$file" >> "$IPv4_TMP"
+
+            # 提取 IPv6：格式为 注册机构|国家代码|ipv6|起始地址|前缀长度|分配日期|状态
+            awk -F'|' '
+              $1 ~ /^(apnic|arin|ripencc|lacnic|afrinic)$/ && $2 == "CN" && $3 == "ipv6" && $5 ~ /^[0-9]+$/ {
+                printf "%s/%d\n", $4, $5;
+              }
+            ' "$file" >> "$IPv6_TMP"
+          done
+
+          echo "Raw IPv4 entries: $(wc -l < "$IPv4_TMP")"
+          echo "Raw IPv6 entries: $(wc -l < "$IPv6_TMP")"
+
+          # 去重（基于字符串精确匹配）并排序
+          sort -u -V "$IPv4_TMP" > china_ipv4_list.txt
+          sort -u -V "$IPv6_TMP" > china_ipv6_list.txt
+
+          echo "Final IPv4 CIDRs: $(wc -l < china_ipv4_list.txt)"
+          echo "Final IPv6 CIDRs: $(wc -l < china_ipv6_list.txt)"
+
+      - name: Upload artifact (IP list files)
+        uses: actions/upload-artifact@v4
+        with:
+          name: china-ip-lists
+          path: |
+            china_ipv4_list.txt
+            china_ipv6_list.txt
+
+      - name: Commit and push changes (optional)
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add china_ipv4_list.txt china_ipv6_list.txt
+          if git diff --cached --quiet; then
+            echo "No changes in IP lists, skipping commit."
+          else
+            git commit -m "Update China IP lists from all RIRs - $(date +'%Y-%m-%d')"
+            git push
+          fi

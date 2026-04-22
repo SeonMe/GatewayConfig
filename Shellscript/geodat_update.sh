@@ -13,6 +13,7 @@ set -euo pipefail
 mkdir -p "$tmp_dir" "$router_dir" "$app_dir"
 ## geoview
 curl -fsSL -o "$app_dir/geoview" https://github.com/snowie2000/geoview/releases/latest/download/geoview-linux-amd64 || { echo "Failed to download geoview"; exit 1; }
+curl -fsSL -o "$app_dir/produce.py" https://raw.githubusercontent.com/SeonMe/GatewayConfig/refs/heads/main/Shellscript/produce.py || { echo "Failed to download produce.py"; exit 1; }
 ## DAE & MosDNS
 curl -fsSL -o "$tmp_dir/geoip.dat"   "https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geoip.dat" || { echo "Failed to download geoip.dat"; exit 1; }
 curl -fsSL -o "$tmp_dir/geosite.dat" "https://cdn.jsdelivr.net/gh/Loyalsoldier/v2ray-rules-dat@release/geosite.dat" || { echo "Failed to download geosite.dat"; exit 1; }
