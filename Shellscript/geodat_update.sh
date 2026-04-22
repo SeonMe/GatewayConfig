@@ -35,7 +35,9 @@ curl -fsSL -o "$tmp_dir/geosite.dat" "https://cdn.jsdelivr.net/gh/Loyalsoldier/v
 ## brid router
 curl -fsSL -o "$router_dir/ipv4-address-space.csv" "https://www.iana.org/assignments/ipv4-address-space/ipv4-address-space.csv" || { echo "Failed to download ipv4-address-space.csv"; exit 1; }
 curl -fsSL -o "$router_dir/delegated-apnic-latest"  "https://ftp.apnic.net/stats/apnic/delegated-apnic-latest" || { echo "Failed to download delegated-apnic-latest"; exit 1; }
-curl -fsSL -o "$router_dir/china_ip_list.txt"       "https://raw.githubusercontent.com/SeonMe/GatewayConfig/refs/heads/main/china_ipv4_list.txt" || { echo "Failed to download china_ip_list.txt"; exit 1; }
+URL="https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/geolite2_country/country_cn.netset"
+OUTPUT_FILE="china_ip_list.txt"
+curl -s "$URL" | grep -v '^[[:space:]]*#' > "$router_dir/$OUTPUT_FILE"
 
 
 # DAE
