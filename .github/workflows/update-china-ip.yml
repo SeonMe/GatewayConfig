@@ -13,7 +13,7 @@ jobs:
       contents: write      # 如需自动提交回仓库
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           persist-credentials: true
 
@@ -88,7 +88,7 @@ jobs:
           echo "Final IPv6 CIDRs: $(wc -l < china_ipv6_list.txt)"
 
       - name: Upload artifact (IP list files)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: china-ip-lists
           path: |
