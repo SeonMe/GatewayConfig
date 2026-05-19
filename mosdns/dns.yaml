@@ -1,5 +1,6 @@
 plugins:
-  # google
+  # ==================== 上游 DNS 转发器 ====================
+  # Google 公共 DNS (DoH / DoT)，用于国外域名解析
   - tag: google
     type: forward
     args:
@@ -18,7 +19,7 @@ plugins:
           dial_addr: "8.8.4.4"
           enable_pipeline: true
 
-  # cloudflare
+  # Cloudflare DNS (DoH / DoT)，作为国外备用
   - tag: cloudflare
     type: forward
     args:
@@ -37,7 +38,7 @@ plugins:
           dial_addr: "1.0.0.1"
           enable_pipeline: true
 
-  # 阿里 DNS
+  # 阿里公共 DNS (DoQ / DoH / DoT)，用于国内域名解析
   - tag: ali
     type: forward
     args:
@@ -75,7 +76,7 @@ plugins:
           dial_addr: "2400:3200:baba::1"
           enable_pipeline: true
 
-  # dnspod
+  # DNSPod 公共 DNS (DoH / DoT)，作为国内备用
   - tag: dnspod
     type: forward
     args:
@@ -94,7 +95,7 @@ plugins:
           dial_addr: "2402:4e00::"
           enable_pipeline: true
 
-  # local dns
+  # 本地 DNS 转发 (指向本机 53 端口，用于内网解析)
   - tag: local
     type: forward
     args:
@@ -102,19 +103,20 @@ plugins:
       upstreams:
         - addr: "udp://127.0.0.1:53"
 
-  # server 失败
+  # ==================== 响应拒绝插件 ====================
+  # 返回 SERVFAIL (服务端失败)
   - tag: reject_2
     type: sequence
     args:
       - exec: reject 2
 
-  # 拒绝响应
+  # 返回 NXDOMAIN (域名不存在)
   - tag: reject_3
     type: sequence
     args:
       - exec: reject 3
 
-  # 不支持的操作
+  # 返回 REFUSED (拒绝查询)
   - tag: reject_5
     type: sequence
     args:

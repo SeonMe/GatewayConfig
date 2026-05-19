@@ -1,26 +1,30 @@
-# 日志配置
+# ============================================================
+# 日志与 API
+# ============================================================
 log:
   level: info
   file: "/var/log/mosdns.log"
 
-# API 服务配置
 api:
   http: "0.0.0.0:8338"
 
-# 引入外部配置
 include:
   - "/etc/mosdns/dat_exec.yaml"
   - "/etc/mosdns/dns.yaml"
 
+# ============================================================
+# 插件定义
+# ============================================================
 plugins:
-  # 拒绝空域名
+  # -------------------------- 基础插件 --------------------------
+  # 拒绝空域名（qname 为空的请求）
   - tag: reject_null_domain
     type: sequence
     args:
       - exec: query_summary reject_null_domain
       - exec: $reject_3
 
-  # 拒绝 qtype 65
+  # 拒绝 qtype 65 (HTTPS 类型，减少不必要的 SVCB/HTTPS 查询)
   - tag: reject_qtype65
     type: sequence
     args:
@@ -28,7 +32,24 @@ plugins:
       - exec: $reject_5
       - exec: return 
 
-  # 国外 DNS 组
+  # 反向查询数据库：自动记录 A/AAAA 响应中的 IP-域名映射，用于后续 PTR 查询
+  - tag: reverse_db
+    type: reverse_lookup
+    args: 
+      size: 65535
+      ttl: 7200
+      handle_ptr: true
+
+  # 最终响应处理器：强制 TTL 为 5 分钟，更新反向数据库，并返回响应
+  - tag: final_handle
+    type: sequence
+    args:
+      - exec: $ttl_5m
+      - exec: $reverse_db
+      - exec: accept
+
+  # -------------------------- DNS 上游与封装 --------------------------
+  # 国外 DNS 上游组（Google 主，Cloudflare 备）
   - tag: dns_nocn
     type: "fallback"
     args:
@@ -37,7 +58,7 @@ plugins:
       threshold: 500
       always_standby: true
 
-  # 国内 DNS 组
+  # 国内 DNS 上游组（阿里主，DNSPod 备）
   - tag: dns_cn
     type: "fallback"
     args:
@@ -46,70 +67,78 @@ plugins:
       threshold: 300
       always_standby: true
 
-  # 国外 DNS 序列
+  # 国外 DNS 查询序列（含统计）
   - tag: dns_nocn_seq
     type: sequence
     args:
       - exec: query_summary dns_nocn
       - exec: $dns_nocn
 
-  # 国内 DNS 序列
+  # 国内 DNS 查询序列（含统计）
   - tag: dns_cn_seq
     type: sequence
     args:
       - exec: query_summary dns_cn
       - exec: $dns_cn
 
-  # 本地 DNS 序列
+  # 本地 DNS 查询序列（用于内网解析）
   - tag: local_seq
     type: sequence
     args:
       - exec: query_summary local
       - exec: $local
 
-  # fallback 序列（走国外）
+  # fallback 查询序列（走国外 DNS）
   - tag: fallback_seq
     type: sequence
     args:
       - exec: query_summary fallback
       - exec: $dns_nocn
 
-  # other 序列（走国内）
+  # other 查询序列（走国内 DNS，用于未明确分类的请求）
   - tag: other_seq
     type: sequence
     args:
       - exec: query_summary other
       - exec: $dns_cn
 
-  # 处理国外域名
+  # -------------------------- 查询处理分支 --------------------------
+  # 国内应答处理：写全局缓存，然后跳转统一出口
+  - tag: handle_cn_smart
+    type: sequence
+    args:
+      - exec: $cache_wan
+      - exec: goto final_handle
+
+  # 处理需走国外代理的域名（gfw、非中国地区域名）
   - tag: query_nocn
     type: sequence
     args:
-      - matches: qtype 28
-        exec: reject 3
+      # 如果需要过滤 AAAA (qtype 28)，可取消下行注释
+      #- matches: qtype 28
+      #  exec: reject 3
       - exec: $no_ecs
       - exec: $dns_nocn_seq
+      - exec: $cache_wan
+      - exec: goto final_handle
 
-  # 国内查询验证序列
+  # 国内应答验证与分流：若为国内 IP 则写缓存并返回，否则改走国外查询
   - tag: query_cn_smart
     type: sequence
     args:
       - matches: resp_ip $geoip_cn
-        exec: accept
+        exec: goto handle_cn_smart
       - exec: goto query_nocn
 
-  # 处理国内域名
+  # 处理国内域名：使用 ECS 查询国内上游
   - tag: query_cn
     type: sequence
     args:
-      - exec: $cache_wan
-      - matches: has_resp
-        exec: return
       - exec: $ecs_cn
       - exec: $dns_cn_seq
       - exec: goto query_cn_smart
 
-  # fallback 查询（用于未知域名）
+  # fallback 查询：用于未匹配任何规则的域名，走国外 DNS（并过滤 AAAA）
   - tag: query_fallback
     type: sequence
     args:
@@ -117,32 +146,33 @@ plugins:
         exec: reject 3
       - exec: $no_ecs
       - exec: $fallback_seq
+      - exec: $cache_wan
+      # 注意：该分支结尾未显式跳转 final_handle，但 main_sequence 会通过 has_resp_main 进入
 
-  # 处理局域网域名（含内网 PTR）
+  # 处理局域网域名（含内网 PTR）：先查局域网缓存，未命中则查询本地上游
   - tag: query_lan
     type: sequence
     args:
       - exec: $cache_lan
       - matches: has_resp
-        exec: return
+        exec: goto final_handle
       - exec: $local_seq
+      - matches: has_resp
+        exec: $cache_lan
+      - matches: has_resp
+        exec: goto final_handle
+      - exec: reject 3
 
-  # 其他未分类查询
+  # 处理其他查询（qtype 255 等）：走国内上游
   - tag: query_other
     type: sequence
     args:
       - exec: $no_ecs
       - exec: $other_seq
+      - exec: $cache_wan
+      - exec: goto final_handle
 
-  # 反向查询数据库（自动记录 A/AAAA 映射）
-  - tag: reverse_db
-    type: reverse_lookup
-    args: 
-      size: 65535
-      ttl: 7200
-      handle_ptr: true
-
-  # 处理 PTR 查询
+  # 处理 PTR 反向查询：私有 IP 走局域网查询，其余尝试反向数据库，均失败则拒绝
   - tag: query_ptr
     type: sequence
     args:
@@ -155,22 +185,15 @@ plugins:
         exec: accept
       - exec: reject 3
 
-  # 最终响应处理器（统一处理反向记录和 TTL）
-  - tag: final_handle
-    type: sequence
-    args:
-      - exec: $ttl_5m
-      - exec: $reverse_db
-      - exec: accept
-
-  # 主流程有响应时跳转至最终处理器
+  # -------------------------- 主流程控制 --------------------------
+  # 若主流程中存在响应，跳转至最终处理
   - tag: has_resp_main
     type: sequence
     args:
       - matches: has_resp
         exec: goto final_handle
 
-  # 预处理序列
+  # 预处理：按查询类型过滤或转发
   - tag: pre_sequence
     type: sequence
     args:
@@ -183,34 +206,32 @@ plugins:
       - matches: qtype 255
         exec: $query_other
 
-  # 主解析序列（顺序：缓存 -> 分流 -> 查询 -> 验证）
+  # 主解析序列：全局缓存查询 → 域名分流 → 对应分支处理
   - tag: main_sequence
     type: sequence
     args:
+      # 先查全局缓存，命中则直接返回（经过 final_handle）
       - exec: $cache_wan
       - exec: jump has_resp_main
 
+      # 按规则分流
       - matches: qname $geosite_gfw
         exec: goto query_nocn
-      - exec: jump has_resp_main
       
       - matches: qname $whitelist
         exec: goto query_cn
-      - exec: jump has_resp_main
       
       - matches: qname $geosite_location-nocn
         exec: goto query_nocn
-      - exec: jump has_resp_main
       
       - matches: qname $geosite_cn
         exec: goto query_cn
-      - exec: jump has_resp_main
 
-      - exec: $no_ecs
+      # 均不匹配时走 fallback 查询，最后统一处理响应
       - exec: $query_fallback
       - exec: jump has_resp_main
 
-  # 总入口序列
+  # 总入口：记录指标 → 预处理 → 主流程
   - tag: sequence
     type: sequence
     args:
@@ -218,13 +239,12 @@ plugins:
       - exec: $pre_sequence
       - exec: $main_sequence
 
-  # UDP 服务器
+  # -------------------------- 服务器入口 --------------------------
   - type: udp_server
     args:
       entry: sequence
       listen: :5333
 
-  # TCP 服务器
   - type: tcp_server
     args:
       entry: sequence

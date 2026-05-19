@@ -1,84 +1,100 @@
 plugins:
-  # 私网 IP
+  # ==================== IP 与域名集合 ====================
+  # 私有/局域网 IP 段（用于识别内网请求）
   - tag: geoip_private
     type: ip_set
     args:
       files:
         - "/etc/mosdns/geodat/geoip_private.txt"
-  # cn ip
+        
+  # 中国 IP 段（用于判定响应 IP 是否属于国内）
   - tag: geoip_cn
     type: ip_set
     args:
       files:
         - "/etc/mosdns/geodat/geoip_cn.txt"
-  # cn 域名
+        
+  # 中国域名列表（匹配国内站点）
   - tag: geosite_cn
     type: domain_set
     args:
       files:
         - "/etc/mosdns/geodat/geosite_cn.txt"
-  # 白名单
+        
+  # 手动白名单域名（强制走国内解析）
   - tag: whitelist
     type: domain_set
     args:
       files:
         - "/etc/mosdns/rule/whitelist.txt"
-  # gfw 域名
+        
+  # GFW 域名列表（匹配被干扰/需代理的站点）
   - tag: geosite_gfw
     type: domain_set
     args:
       files:
         - "/etc/mosdns/geodat/geosite_gfw.txt"
-  # 非 cn 域名
+        
+  # 非中国地区域名（匹配国外站点）
   - tag: geosite_location-nocn
     type: domain_set
     args:
       files:
         - "/etc/mosdns/geodat/geosite_geolocation-nocn.txt"
 
-  # 缓存 lan
+  # ==================== DNS 缓存 ====================
+  # 内网缓存（用于局域网域名 / 私有 PTR 解析）
   - tag: cache_lan
     type: cache
     args:
       size: 8192
       lazy_cache_ttl: 86400
+      dump_file: /etc/mosdns/lan_cache.dump
+      dump_interval: 600
 
-  # 缓存 wan
+  # 全局缓存（用于国内/国外/未知域名的解析结果）
   - tag: cache_wan
     type: cache
     args:
       size: 131072
       lazy_cache_ttl: 86400
+      dump_file: /etc/mosdns/wan_cache.dump
+      dump_interval: 600
 
-  # no ecs
+  # ==================== EDNS Client Subnet 处理 ====================
+  # 禁用 ECS（查询上游时隐藏客户端子网）
   - tag: no_ecs
     type: "ecs_handler"
     args:
       forward: false
-      #preset: ""
       send: false
       mask4: 24
       mask6: 48
 
-  # 附加 ecs cn 信息
+  # 附加国内 ECS（向国内 DNS 上报特定 IP 子网，优化 CDN 调度）
   - tag: ecs_cn
     type: "ecs_handler"
     args:
       forward: false
-      #preset: ""
+      preset: "100.102.200.1"
       send: true
       mask4: 24
       mask6: 48
 
-  # 调整 ttl
+  # ==================== TTL 调整 ====================
+  # 强制 TTL 为 1 分钟
   - tag: ttl_1m
     type: sequence
     args:
       - exec: ttl 60
+      
+  # 强制 TTL 为 5 分钟
   - tag: ttl_5m
     type: sequence
     args:
       - exec: ttl 300
+      
+  # 强制 TTL 为 1 小时
   - tag: ttl_1h
     type: sequence
     args:
