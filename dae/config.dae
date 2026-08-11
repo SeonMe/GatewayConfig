@@ -4,8 +4,9 @@ global {
   tproxy_port_protect: true
   pprof_port: 0
   so_mark_from_dae: 0
+
   # Log level: error, warn, info, debug, trace
-  log_level: error
+  log_level: warn
 
   ##### Interface and kernel options
   lan_interface: enp1s0
@@ -23,22 +24,40 @@ global {
   dial_mode: domain
   allow_insecure: false
   sniffing_timeout: 100ms
-  tls_implementation: tls
-  utls_imitate: chrome_auto
-  tls_fragment: false
 
+  tls_implementation: tls
+  tls_fragment: false
+  tls_fragment_length: '50-100'
+  tls_fragment_interval: '10-20'
+
+  bootstrap_resolver: '223.5.5.5:53'
+  fallback_resolver: '223.5.5.5:53'
+
+  ##### Hysteria2 Bandwidth
+  # bandwidth_max_tx: '50 mbps'
+  # bandwidth_max_rx: '500 mbps'
 }
 
 node {
-  hk: 'hysteria2://passwd@127.0.0.1:443/?sni=domain'
+  hk_hy2: 'hysteria2://1111@1111.1111.net:443/?sni=1111.1111.net'
+  tw_hy2: 'hysteria2://2222@2222.1111.net:443/?sni=2222.1111.net'
 }
 
 dns {
+  fixed_domain_ttl {
+    ## DDNS Domains
+    2222.1111.net: 0
+  }
   upstream {
+    alidns: 'udp://223.5.5.5:53'
     mosdns: 'tcp+udp://127.0.0.1:5333'
   }
   routing {
     request {
+      node(name_keyword: tw_hy2) -> alidns
+      node(name_keyword: hk_hy2) -> alidns
+      qtype(aaaa) && !qname(geosite:cn) -> reject
+      qtype(https) -> reject
       fallback: mosdns
     }
   }
@@ -46,65 +65,62 @@ dns {
 
 group {
   Proxy {
-    policy: min
+    # Primary
+    filter: name(tw_hy2)
+    # Backup
+    filter: name(hk_hy2) [add_latency: 5000ms]
+    policy: min_moving_avg
+    check_interval: 10s
+    check_tolerance: 50ms
   }
 }
 
 routing {
-  ### Preset rules
-  pname(mosdns) && l4proto(udp) && dport(5333) -> direct(must)
+  ### System / DNS loop protection
+  pname(mosdns) -> must_rules
+  pname(NetworkManager) -> direct
+  pname(systemd-resolved) -> direct
+
+  ### Alidns / Dnspod
+  dip(223.5.5.5, 223.6.6.6, '2400:3200::1', '2400:3200:baba::1') -> direct
+  domain(suffix:dns.alidns.com) -> direct
+  dip(119.29.29.29, '2402:4e00::') -> direct
+  domain(suffix:doh.pub) -> direct
+  domain(suffix:dot.pub) -> direct
+
+  ### Multicast / Broadcast
   dip(224.0.0.0/3, 'ff00::/8') -> direct(must)
+
+  ### Special DNS client
   sip(10.0.0.4) && l4proto(udp) && dport(53) -> direct
+
+  ### ICMP
   l4proto(icmp) -> direct
   l4proto(icmp6) -> direct
+
+  ### Traceroute
   l4proto(udp) && dport(33434-33534) -> direct
 
-  ### Private rules
+  ### Private / LAN
   dip(geoip:private) -> direct
-  dip(10.0.0.0/24, 'fe10::/64') -> direct
+  dip(10.0.0.0/24, 'fd00::/64') -> direct
 
-  ### ZeroTier rules
-  sip(10.0.0.3, 'fe10::3') -> direct
+  ### ZeroTier
+  sip(10.0.0.3, 'fd00::3') -> direct
   dip(10.10.0.0/24) -> direct
   sip(10.10.0.0/24) -> direct
 
   ### BT/PT
   dscp(0x4) -> direct
 
-  ### Node
-  dip(127.0.0.1) -> direct
-  domain(suffix: domain) -> direct
+  ### Proxy node domains
+  domain(full: 1111.1111.net) -> direct(must)
+  domain(full: 2222.1111.net) -> direct(must)
 
-  ## Proxy rules
-  domain(geosite:gfw) -> Proxy
-  domain(geosite:cn) && !dip(geoip:cn) -> Proxy
+  ### QUIC
+  l4proto(udp) && dport(443) -> block
 
-  ### Custom Rules CN
-  ## 腾讯
-  domain(geosite:tencent) -> direct
-  ## 字节跳动
-  domain(geosite:bytedance) -> direct
-  ## 哔哩哔哩
-  domain(geosite:bilibili) -> direct
-  ## 爱奇艺
-  domain(geosite:iqiyi) -> direct
-  ## 优酷
-  domain(geosite:youku) -> direct
-  ## Apple CN
-  domain(geosite:apple-cn) -> direct
-
-  ### DNS
-  ## Ali
-  domain(suffix: dns.alidns.com) -> direct
-  dip(223.5.5.5) -> direct
-  dip(223.6.6.6) -> direct
-  dip('2400:3200::1') -> direct
-  dip('2400:3200:baba::1') -> direct
-  ## dnspod
-  domain(suffix: doh.pub) -> direct
-  domain(suffix: dot.pub) -> direct
-  dip(119.29.29.29) -> direct
-  dip('2402:4e00::') -> direct
+  ### Explicit proxy DNS
   ## Google
   domain(suffix: dns.google) -> Proxy
   dip(8.8.8.8) -> Proxy
@@ -115,18 +131,20 @@ routing {
   dip(1.1.1.1) -> Proxy
   dip(1.0.0.1) -> Proxy
 
-  ### QUIC Block
-  l4proto(udp) && dport(443) -> block
+  ### Explicit Proxy Domains
+  domain(geosite:gfw) && ipversion(4) -> Proxy
 
-  ## Custom Rules NoCN
-  ## Spotify
-  domain(geosite:spotify) -> Proxy
-  ## Cloudflare
-  #dip(geoip:cloudflare) -> Proxy
+  ### CN domains using foreign IP
+  domain(geosite:cn) && !dip(geoip:cn) && ipversion(4) -> Proxy
 
-  ### Default
-  domain(geosite:cn) -> direct
+  ### China IP
   dip(geoip:cn) -> direct
+
+  ### Foreign IPv6
+  ipversion(6) -> block
+
+  ### China domains
+  domain(geosite:cn) -> direct
 
   ### Fallback
   fallback: Proxy
