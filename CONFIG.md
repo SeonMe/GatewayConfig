@@ -305,19 +305,3 @@ mosdns 通过 `udp_server`/`tcp_server` 监听 `127.0.0.1:5353`，只接收来�
 8. **DNS 链路较长**：客户端 → AdGuard → dae 劫持 → mosdns →（国内直连 / 经代理的国外上游），五段链路平均解析延迟高于单上游方案；且 mosdns v5 的插件式 YAML 维护成本不低；
 9. **规则细节存在维护点**：`routing.dae` 中节点域名为占位示例（`*.example.com`），实际部署需修正并替换真实域名；`dat_exec.yaml` 的 `ecs_cn` preset 是占位 IP `123.123.123.123`，必须改成自己运营商公网 IP，否则 CDN 调度会指向错误省份；
 10. **Bird 静态路由表较大**：每次 `birdc configure` 重载要重算全部静态路由（配合内核调优已缓解），极端情况下会话抖动期间路由闪断数秒。
-
----
-
-## 8. 部署前检查清单
-
-- [ ] RouterOS ≥ 7.x，内存 ≥ 128MB；
-- [ ] 修改 `bgp_build.rsc.sh` 中的接口名、网段、光猫地址等本地变量；
-- [ ] AdGuard Home 部署在 `10.0.0.4`，上游 DNS 设为 `10.0.0.2:53`（v4）/ `[fd00::2]:53`（v6）——由 dae 劫持接管，Debian 上无需任何进程监听 53 端口；
-- [ ] 替换 `node.dae` 中全部占位节点，修正 `routing.dae` 第 40 行缺右括号问题；
-- [ ] 将 `dat_exec.yaml` 的 `ecs_cn.preset` 改为本机运营商公网 IP；
-- [ ] 确认 `dns.dae` 的 mosdns 上游端口与 mosdns 实际监听端口一致（本文按 `127.0.0.1:5353` 描述）；
-- [ ] 按公网类型选择挂载 `ipv4.sh`/`ipv6.sh` 到 PPPoE up 事件或 scheduler；
-- [ ] 首次运行 `geodat_update.sh` 前：安装 bird2/dae/mosdns 并放好各自配置，为 `mosdns` 准备 `rule/whitelist.txt`、`rule/no_cache.txt`（可为空文件）；
-- [ ] 验证顺序建议：单栈 v4 先通（BGP established → 国外段路由出现在 main 表 → mangle 计数增长 → dae 日志出现代理连接）→ 再开 v6；
-- [ ] DNS 验证：客户端 `nslookup` 任意域名应先命中 AdGuard 查询日志（广告过滤生效），国外域名返回的 IP 在 mosdns 日志中对应"经代理的国外上游"分支；
-- [ ] 演练一次故障回退：`systemctl stop dae` 与 `systemctl stop bird`，确认全网回落直连。
