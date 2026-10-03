@@ -13,39 +13,36 @@
 
 
 ## OSPF 动态路由配置
-/routing id
 # 设置路由器 ID，通常使用本地 IPv4 地址以示唯一性
-add comment=Gateway disabled=no id=$local_ipv4_addr name=Gateway select-dynamic-id=only-vrf
-/routing ospf instance
+/routing id add comment=Gateway disabled=no id=$local_ipv4_addr name=Gateway select-dynamic-id=only-vrf
+
 # 创建 OSPF 实例：v2 负责 IPv4，v3 负责 IPv6
+/routing ospf instance
 add comment=Gateway disabled=no name=ipv4 router-id=$local_ipv4_addr version=2
 add comment=Gateway disabled=no name=ipv6 router-id=$local_ipv4_addr version=3
-/routing ospf area
+
 # 创建 OSPF 区域（Area 0），用于逻辑隔离路由域
+/routing ospf area
 add comment=Gateway disabled=no instance=ipv4 name=ipv4
 add comment=Gateway disabled=no instance=ipv6 name=ipv6
-/routing ospf interface-template
+
 # 配置接口模板：设置网桥接口为点对点(ptp)类型，并设定优先级与开销
+/routing ospf interface-template
 add area=ipv4 comment=Gateway cost=10 disabled=no interfaces=$interface_name priority=32 retransmit-interval=10s transmit-delay=5s type=ptp
 add area=ipv6 comment=Gateway cost=10 disabled=no interfaces=$interface_name priority=32 retransmit-interval=10s transmit-delay=5s type=ptp
 
-
 ## 策略路由表与规则
-/routing table
 # 创建名为 bypass 的自定义路由表，用于存放分流路由
-add comment=Gateway disabled=no fib name=bypass
-/routing rule
+/routing table add comment=Gateway disabled=no fib name=bypass
 # 配置路由规则：强制在 bypass 路由表中查找标记流量
-add action=lookup-only-in-table comment=Gateway disabled=no routing-mark=bypass table=bypass
+/routing rule add action=lookup-only-in-table comment=Gateway disabled=no routing-mark=bypass table=bypass
 
 
 ## 防火墙流量标记
-/ip firewall mangle
 # IPv4 标记：来自旁路网关且目标不是本地网段的流量，打上 bypass 路由标记
-add action=mark-routing chain=prerouting comment=Gateway dst-address=!$local_ipv4_subnet in-interface=$interface_name new-routing-mark=bypass src-address=$gateway_ipv4_addr
-/ipv6 firewall mangle
+/ip firewall mangle add action=mark-routing chain=prerouting comment=Gateway dst-address=!$local_ipv4_subnet in-interface=$interface_name new-routing-mark=bypass src-address=$gateway_ipv4_addr
 # IPv6 标记：同上，处理来自旁路网关 IPv6 ULA 地址的外网流量
-add action=mark-routing chain=prerouting comment=Gateway dst-address=!$local_ipv6_subnet in-interface=$interface_name new-routing-mark=bypass src-address=$gateway_ipv6_addr
+/ipv6 firewall mangle add action=mark-routing chain=prerouting comment=Gateway dst-address=!$local_ipv6_subnet in-interface=$interface_name new-routing-mark=bypass src-address=$gateway_ipv6_addr
 
 
 ## IPv4 路由条目

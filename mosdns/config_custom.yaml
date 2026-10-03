@@ -2,7 +2,7 @@
 # 日志与 API
 # ============================================================
 log:
-  level: info
+  level: warn
   file: "/var/log/mosdns.log"
 
 api:
@@ -30,12 +30,12 @@ plugins:
     args:
       - exec: query_summary reject_qtype65
       - exec: $reject_5
-      - exec: return 
+      - exec: return
 
   # 反向查询数据库：自动记录 A/AAAA 响应中的 IP-域名映射，用于后续 PTR 查询
   - tag: reverse_db
     type: reverse_lookup
-    args: 
+    args:
       size: 65535
       ttl: 7200
       handle_ptr: true
@@ -65,7 +65,7 @@ plugins:
       primary: ali
       secondary: dnspod
       threshold: 300
-      always_standby: true
+      always_standby: false
 
   # 国外 DNS 查询序列（含统计）
   - tag: dns_nocn_seq
@@ -80,13 +80,6 @@ plugins:
     args:
       - exec: query_summary dns_cn
       - exec: $dns_cn
-
-  # 本地 DNS 查询序列（用于内网解析）
-  - tag: local_seq
-    type: sequence
-    args:
-      - exec: query_summary local
-      - exec: $local
 
   # fallback 查询序列（走国外 DNS）
   - tag: fallback_seq
@@ -115,8 +108,8 @@ plugins:
     type: sequence
     args:
       # 如果需要过滤 AAAA (qtype 28)，可取消下行注释
-      #- matches: qtype 28
-      #  exec: reject 3
+      - matches: qtype 28
+        exec: reject 3
       - exec: $no_ecs
       - exec: $dns_nocn_seq
       - exec: $cache_wan
@@ -149,19 +142,13 @@ plugins:
       - exec: $cache_wan
       # 注意：该分支结尾未显式跳转 final_handle，但 main_sequence 会通过 has_resp_main 进入
 
-  # 处理局域网域名（含内网 PTR）：先查局域网缓存，未命中则查询本地上游
-  - tag: query_lan
+  # 不缓存的域名查询序列（直接走国外 DNS，不写缓存）
+  - tag: query_no_cache
     type: sequence
     args:
-      - exec: $cache_lan
-      - matches: has_resp
-        exec: goto final_handle
-      - exec: $local_seq
-      - matches: has_resp
-        exec: $cache_lan
-      - matches: has_resp
-        exec: goto final_handle
-      - exec: reject 3
+      - exec: $no_ecs
+      - exec: $dns_nocn_seq
+      - exec: goto final_handle   # 只经过 TTL 调整和反向记录，不写入缓存
 
   # 处理其他查询（qtype 255 等）：走国内上游
   - tag: query_other
@@ -177,13 +164,11 @@ plugins:
     type: sequence
     args:
       - matches: "ptr_ip $geoip_private"
-        exec: $query_lan
-      - matches: has_resp
-        exec: accept
+        exec: return
       - exec: $reverse_db
       - matches: has_resp
         exec: accept
-      - exec: reject 3
+      - exec: return
 
   # -------------------------- 主流程控制 --------------------------
   # 若主流程中存在响应，跳转至最终处理
@@ -210,6 +195,10 @@ plugins:
   - tag: main_sequence
     type: sequence
     args:
+      # 优先匹配不缓存的域名，直接跳转专用序列（不查缓存、不写缓存）
+      - matches: qname $no_cache_domains
+        exec: goto query_no_cache
+
       # 先查全局缓存，命中则直接返回（经过 final_handle）
       - exec: $cache_wan
       - exec: jump has_resp_main
@@ -217,13 +206,13 @@ plugins:
       # 按规则分流
       - matches: qname $geosite_gfw
         exec: goto query_nocn
-      
+
       - matches: qname $whitelist
         exec: goto query_cn
-      
+
       - matches: qname $geosite_location-nocn
         exec: goto query_nocn
-      
+
       - matches: qname $geosite_cn
         exec: goto query_cn
 

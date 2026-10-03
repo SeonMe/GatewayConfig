@@ -6,35 +6,35 @@ plugins:
     args:
       files:
         - "/etc/mosdns/geodat/geoip_private.txt"
-        
+
   # 中国 IP 段（用于判定响应 IP 是否属于国内）
   - tag: geoip_cn
     type: ip_set
     args:
       files:
         - "/etc/mosdns/geodat/geoip_cn.txt"
-        
+
   # 中国域名列表（匹配国内站点）
   - tag: geosite_cn
     type: domain_set
     args:
       files:
         - "/etc/mosdns/geodat/geosite_cn.txt"
-        
+
   # 手动白名单域名（强制走国内解析）
   - tag: whitelist
     type: domain_set
     args:
       files:
         - "/etc/mosdns/rule/whitelist.txt"
-        
+
   # GFW 域名列表（匹配被干扰/需代理的站点）
   - tag: geosite_gfw
     type: domain_set
     args:
       files:
         - "/etc/mosdns/geodat/geosite_gfw.txt"
-        
+
   # 非中国地区域名（匹配国外站点）
   - tag: geosite_location-nocn
     type: domain_set
@@ -42,16 +42,14 @@ plugins:
       files:
         - "/etc/mosdns/geodat/geosite_geolocation-nocn.txt"
 
-  # ==================== DNS 缓存 ====================
-  # 内网缓存（用于局域网域名 / 私有 PTR 解析）
-  - tag: cache_lan
-    type: cache
+  # 不缓存的域名集合
+  - tag: no_cache_domains
+    type: domain_set
     args:
-      size: 8192
-      lazy_cache_ttl: 86400
-      dump_file: /etc/mosdns/lan_cache.dump
-      dump_interval: 600
+      files:
+         - "/etc/mosdns/rule/no_cache.txt"
 
+  # ==================== DNS 缓存 ====================
   # 全局缓存（用于国内/国外/未知域名的解析结果）
   - tag: cache_wan
     type: cache
@@ -76,7 +74,8 @@ plugins:
     type: "ecs_handler"
     args:
       forward: false
-      preset: "100.102.200.1"
+      # 你的本地运营商公网IP
+      preset: "123.123.123.123"
       send: true
       mask4: 24
       mask6: 48
@@ -87,13 +86,13 @@ plugins:
     type: sequence
     args:
       - exec: ttl 60
-      
+
   # 强制 TTL 为 5 分钟
   - tag: ttl_5m
     type: sequence
     args:
       - exec: ttl 300
-      
+
   # 强制 TTL 为 1 小时
   - tag: ttl_1h
     type: sequence

@@ -1,0 +1,73 @@
+# routing.dae
+
+routing {
+  ### System / DNS loop protection
+  pname(mosdns) -> must_rules
+  pname(NetworkManager) -> direct
+  pname(systemd-resolved) -> direct
+
+  ### Alidns / Dnspod
+  dip(223.5.5.5, 223.6.6.6, '2400:3200::1', '2400:3200:baba::1') -> direct
+  domain(suffix:dns.alidns.com) -> direct
+  dip(119.29.29.29, '2402:4e00::') -> direct
+  domain(suffix:doh.pub) -> direct
+  domain(suffix:dot.pub) -> direct
+
+  ### Multicast / Broadcast
+  dip(224.0.0.0/3, 'ff00::/8') -> direct(must)
+
+  ### Special DNS client
+  sip(10.0.0.4) && l4proto(udp) && dport(53) -> direct
+
+  ### Traceroute
+  l4proto(udp) && dport(33434-33534) -> direct
+
+  ### Private / LAN
+  dip(geoip:private) -> direct
+  dip(10.0.0.0/24, 'fd00::/64') -> direct
+
+  ### ZeroTier
+  sip(10.0.0.3, 'fd00::3') -> direct
+  dip(10.10.0.0/24) -> direct
+  sip(10.10.0.0/24) -> direct
+
+  ### BT/PT
+  dscp(0x4) -> direct
+
+  ### Proxy node domains
+  domain(full: hk.example.com) -> direct(must)
+  domain(full: tw.example.com) -> direct(must)
+  domain(full: us.example.com) -> direct(must)
+
+  ### QUIC
+  l4proto(udp) && dport(443) -> block
+
+  ### Explicit proxy DNS
+  ## Google
+  domain(suffix: dns.google) -> Proxy
+  dip(8.8.8.8) -> Proxy
+  dip(8.8.4.4) -> Proxy
+  ## Cloudflare
+  domain(suffix: cloudflare-dns.com) -> Proxy
+  domain(suffix: one.one.one.one) -> Proxy
+  dip(1.1.1.1) -> Proxy
+  dip(1.0.0.1) -> Proxy
+
+  ### Explicit Proxy Domains
+  domain(geosite:gfw) && ipversion(4) -> Proxy
+
+  ### CN domains using foreign IP
+  # domain(geosite:cn) && !dip(geoip:cn) && ipversion(4) -> Proxy
+
+  ### China IP
+  dip(geoip:cn) -> direct
+
+  ### Foreign IPv6
+  ipversion(6) -> block
+
+  ### China domains
+  domain(geosite:cn) -> direct
+
+  ### Fallback
+  fallback: Proxy
+}

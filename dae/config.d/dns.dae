@@ -1,0 +1,21 @@
+# dns.dae
+
+dns {
+  fixed_domain_ttl {
+    tw.example.com: 0
+  }
+  upstream {
+    alidns: 'udp://223.5.5.5:53'
+    mosdns: 'tcp+udp://127.0.0.1:5333'
+  }
+  routing {
+    request {
+      node(name_keyword: tw_hy2) -> alidns
+      node(name_keyword: hk_hy2) -> alidns
+      node(name_keyword: us_hy2) -> alidns
+      qtype(aaaa) && !qname(geosite:cn) -> reject
+      qtype(https) -> reject
+      fallback: mosdns
+    }
+  }
+}

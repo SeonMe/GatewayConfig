@@ -82,26 +82,19 @@ plugins:
     args:
       concurrent: 2
       upstreams:
+        # UDP
         # DoH
         - addr: "https://doh.pub/dns-query"
-          dial_addr: "119.29.29.29"
-        - addr: "https://doh.pub/dns-query"
-          dial_addr: "2402:4e00::"
+        #  dial_addr: "119.29.29.29"
+        #- addr: "https://doh.pub/dns-query"
+        #  dial_addr: "2402:4e00::"
         # DoT
-        - addr: "tls://dot.pub"
-          dial_addr: "119.29.29.29"
-          enable_pipeline: true
-        - addr: "tls://dot.pub"
-          dial_addr: "2402:4e00::"
-          enable_pipeline: true
-
-  # 本地 DNS 转发 (指向本机 53 端口，用于内网解析)
-  - tag: local
-    type: forward
-    args:
-      concurrent: 1
-      upstreams:
-        - addr: "udp://127.0.0.1:53"
+        #- addr: "tls://dot.pub"
+        #  dial_addr: "119.29.29.29"
+        #  enable_pipeline: true
+        #- addr: "tls://dot.pub"
+        #  dial_addr: "2402:4e00::"
+        #  enable_pipeline: true
 
   # ==================== 响应拒绝插件 ====================
   # 返回 SERVFAIL (服务端失败)

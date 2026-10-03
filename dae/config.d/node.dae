@@ -1,0 +1,17 @@
+# node.dae
+
+node {
+  hk_hy2: 'hysteria2://passwd@hk.example.com:443/?sni=hk.example.com'
+  tw_hy2: 'hysteria2://passwd@tw.example.com:443/?sni=tw.example.com'
+  us_hy2: 'hysteria2://passwd@us.example.com:443/?sni=us.example.com'
+}
+
+group {
+  Proxy {
+    filter: name(hk_hy2)
+    filter: name(tw_hy2, us_hy2) [add_latency: 5000ms]
+    policy: min_moving_avg
+    check_interval: 30s
+    check_tolerance: 50ms
+  }
+}
