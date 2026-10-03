@@ -16,9 +16,6 @@ routing {
   ### Multicast / Broadcast
   dip(224.0.0.0/3, 'ff00::/8') -> direct(must)
 
-  ### Special DNS client
-  sip(10.0.0.4) && l4proto(udp) && dport(53) -> direct
-
   ### Traceroute
   l4proto(udp) && dport(33434-33534) -> direct
 

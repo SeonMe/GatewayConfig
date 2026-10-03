@@ -1,0 +1,11 @@
+# /etc/logrotate.d/proxy_watchdog
+# 看门狗实时日志轮转（events.log 故障史只增不减，不参与轮转）
+/opt/watchdog/watchdog.log {
+    weekly
+    rotate 8
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}

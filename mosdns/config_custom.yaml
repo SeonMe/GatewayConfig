@@ -67,12 +67,21 @@ plugins:
       threshold: 300
       always_standby: false
 
-  # 国外 DNS 查询序列（含统计）
+  # 国外解析的国内兜底（容灾设计）
+  - tag: dns_foreign
+    type: "fallback"
+    args:
+      primary: dns_nocn
+      secondary: dns_cn
+      threshold: 3000
+      always_standby: false
+
+  # 国外 DNS 查询序列（含统计；经 dns_foreign，代理链路死亡时自动回落国内上游）
   - tag: dns_nocn_seq
     type: sequence
     args:
       - exec: query_summary dns_nocn
-      - exec: $dns_nocn
+      - exec: $dns_foreign
 
   # 国内 DNS 查询序列（含统计）
   - tag: dns_cn_seq
@@ -81,12 +90,12 @@ plugins:
       - exec: query_summary dns_cn
       - exec: $dns_cn
 
-  # fallback 查询序列（走国外 DNS）
+  # fallback 查询序列（走国外 DNS；同样经 dns_foreign 带国内兜底）
   - tag: fallback_seq
     type: sequence
     args:
       - exec: query_summary fallback
-      - exec: $dns_nocn
+      - exec: $dns_foreign
 
   # other 查询序列（走国内 DNS，用于未明确分类的请求）
   - tag: other_seq

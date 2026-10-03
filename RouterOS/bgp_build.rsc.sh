@@ -21,9 +21,15 @@
 /routing bgp instance add as=65001 name=bird router-id=$local_ipv4_addr routing-table=main
 
 ## 建立 BGP 邻居会话
+# use-bfd=yes：为会话启用 BFD，链路故障检测从 hold-time 30s 缩短到亚秒级（注意参数名是 use-bfd，短名 bfd 不被接受）
 /routing bgp connection
-add afi=ip hold-time=30s input.filter=bird-v4-in instance=bird keepalive-time=10s local.address=$local_ipv4_addr .role=ebgp name=bird-v4 remote.address=$gateway_ipv4_addr .as=65002 routing-table=main
-add afi=ipv6 hold-time=30s input.filter=bird-v6-in instance=bird keepalive-time=10s local.address=$local_ipv6_addr .role=ebgp name=bird-v6 remote.address=$gateway_ipv6_addr .as=65002 routing-table=main
+add afi=ip hold-time=30s input.filter=bird-v4-in instance=bird keepalive-time=10s local.address=$local_ipv4_addr .role=ebgp name=bird-v4 remote.address=$gateway_ipv4_addr .as=65002 routing-table=main use-bfd=yes
+add afi=ipv6 hold-time=30s input.filter=bird-v6-in instance=bird keepalive-time=10s local.address=$local_ipv6_addr .role=ebgp name=bird-v6 remote.address=$gateway_ipv6_addr .as=65002 routing-table=main use-bfd=yes
+
+## BFD 配置
+# RouterOS 默认禁止一切 BFD 会话（未显式允许的接口一律 "BFD forbidden for interface"），必须先在此放行内网网桥
+# 参数与 Debian Bird 侧对称（100ms × multiplier 3 ≈ 300ms 检测窗口）；BFD 协商取两端声明值中较慢者，两端一致才不会退化
+/routing bfd configuration add interfaces=$interface_name min-rx=100ms min-tx=100ms multiplier=3 comment=Gateway
 
 ## BGP 入方向路由过滤规则
 /routing filter rule

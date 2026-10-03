@@ -18,8 +18,7 @@
     1. 客户端 DNS 指向 AdGuard Home (`10.0.0.4`)，完成第一步**广告过滤**。
     2. AdGuard Home 的上游 DNS 设为 `10.0.0.2:53`（Debian）。
     3. Debian 上并无进程监听 53 端口——**dae 会劫持所有流经的明文 DNS（53 端口，UDP/TCP）**，统一交由 dae 的 dns 模块处理。
-    4. dae 的 dns 策略（`dns.dae`）中，节点域名走 alidns 直连解析、拒绝国外域名的 AAAA 与 HTTPS(SVCB) 记录，其余查询全部转发给 mosdns (`127.0.0.1:5353`)。
-    5. mosdns 完成**国内外分流解析**：国内域名走阿里/DNSPod（带 ECS），国外域名经 dae 代理查询 Google/Cloudflare（无污染）。
+    4. dae 的 dns 策略（`dns.dae`）中，节点域名走 alidns 直连解析、拒绝国外域名的 AAAA 与 HTTPS(SVCB) 记录，其余查询全部转发给 mosdns (`127.0.0.1:5333`)。    5. mosdns 完成**国内外分流解析**：国内域名走阿里/DNSPod（带 ECS），国外域名经 dae 代理查询 Google/Cloudflare（无污染）；若 google/cloudflare 均失败（代理链路死亡），自动回落国内上游解析出真实 IP，保证直连兜底模式下国外域名仍可解析。
 
 ### 1.2 设备信息与地址规划
 | 设备 | 角色 | 操作系统 | IP 地址 | 备注 |
@@ -33,13 +32,13 @@
 
 ## 2. Bypass Debian 配置
 ### 2.1 Dae
-根据 config.dae，dae 监听 tproxy_port: 12345 做透明代理，同时**劫持所有流经的明文 DNS（53 端口）**：AdGuard Home 发往 `10.0.0.2:53` 的查询（以及任何客户端直发的 53 端口查询）均由 dae 的 dns 模块接管，按 `dns.dae` 策略处理后兜底转发给 mosdns (`127.0.0.1:5353`) 做国内外分流解析。这也是 dae 实现 `dial_mode: domain` 域名分流的前提——DNS 必须经 dae 转发。
+根据 config.dae，dae 监听 tproxy_port: 12345 做透明代理，同时**劫持所有流经的明文 DNS（53 端口）**：AdGuard Home 发往 `10.0.0.2:53` 的查询（以及任何客户端直发的 53 端口查询）均由 dae 的 dns 模块接管，按 `dns.dae` 策略处理后兜底转发给 mosdns (`127.0.0.1:5333`) 做国内外分流解析。这也是 dae 实现 `dial_mode: domain` 域名分流的前提——DNS 必须经 dae 转发。
 
-安装 dae（请参考官方文档），并将配置文件放置于 /etc/dae/config.yaml。
+安装 dae（请参考官方文档），并将配置文件放置于 `/etc/dae/config.dae`（主配置）与 `/etc/dae/config.d/`（分片配置）。
 
 关键路由规则解读：
 
-- `pname(mosdns) -> must_rules`：mosdns 发出的上游 DNS 查询直连放行且优先于劫持，避免 DNS 死循环。
+- `pname(mosdns) -> must_rules`：mosdns 的上游 DNS 查询不被 dae 二次劫持（防 mosdns→dae→mosdns 死循环），同时其流量继续匹配后续规则——国内上游直连、国外上游（如 8.8.8.8）走代理。
 
 - `domain(geosite:cn) -> direct`：国内域名直连。
 
@@ -61,6 +60,8 @@
 
 根据 `dat_exec.yaml`,需要自行准备 `geoip_private.txt`、`geoip_cn.txt`、`geosite_cn.txt`、`whitelist.txt`、`geosite_gfw.txt`、`geosite_geolocation-nocn.txt` 文件，可使用仓库内脚本生成。
 
+关键设计：`config_custom.yaml` 中的 `dns_foreign` 是国外解析的**国内兜底**——google/cloudflare 均失败（代理链路死亡）时自动回落阿里/DNSPod 直连解析，保证直连兜底模式下国外域名仍可解析出真实 IP。注意 mosdns 插件**必须先定义后引用**（如 `dns_foreign` 引用 `dns_cn`，须放在其后）。
+
 ### 2.3 Brid
 
 安装 Bird 2：
@@ -77,6 +78,7 @@ apt install bird2
 
 - **eBGP 邻居**：本机 AS `65002`，与 RouterOS（AS `65001`）建立两条 eBGP 会话——IPv4（`10.0.0.2 ↔ 10.0.0.1`）与 IPv6（`fd00::2 ↔ fd00::1`）。
 - **快速故障检测**：`hold time 30` / `keepalive time 10`，Debian 宕机后 30 秒内 RouterOS 即撤回全部代理路由。
+- **BFD 亚秒级故障检测**：会话额外挂载 BFD（`bfd on`，100ms × multiplier 3 ≈ 300ms 检测窗口），链路故障（含"网口 up 但链路半死"的静默故障）在亚秒级触发路由撤回，hold-time 退化为保底。RouterOS 侧需 `/routing bfd configuration` 放行接口（默认全禁）并给 BGP 连接加 `use-bfd=yes`。
 - **静态路由来源**：`/etc/bird/routes4.conf` 与 `/etc/bird/routes6.conf`（非中国大陆 IP 段），由仓库内 `Shellscript/geodat_update.sh` 调用 `produce.py` 自动生成（该脚本同时会更新 dae 与 mosdns 的 GEO 数据并重载服务）。
 - **导出过滤（export filter）**：只导出静态路由（`RTS_STATIC`），并拒绝默认路由（`0.0.0.0/0`、`::/0`），避免覆盖主路由的默认网关。
 - **next hop self**：所有导出路由的下一跳均改写为 Debian 自身。
@@ -85,7 +87,7 @@ apt install bird2
 
 因为将近三万条路由，使用过程中 `bird` 会产生堆栈溢出，因此需要对运行环境进行优化。
 
-#### 2.4.1 网络接口配置(OSPF 方案需要)
+#### 2.4.1 网络接口配置
 编辑 `/etc/network/interfaces` ,在你的网络配置下方增加启动参数。
 
 ```
@@ -198,6 +200,34 @@ COMMIT
 iptables-restore < /etc/iptables/rules.v4
 ip6tables-restore < /etc/iptables/rules.v6
 ```
+
+### 2.5 代理链路看门狗（proxy_watchdog）
+
+dae 的分组策略只能处理"部分节点挂"（自动切换活节点）；BFD 只能检测链路/整机死亡。当**全部节点同时挂**或 **dae 假死**时，BGP 路由仍在把国外流量送进 Debian，但 Proxy 出不去——流量黑洞。看门狗补上这最后一层（详见 CONFIG.md 第 5 节的故障层次表）。
+
+工作原理：双探针判定（国外探针 `gstatic` 测代理全链路 + 国内探针 `baidu` 测基础网络），连续 3 次国外失败且国内正常 → 判定代理链路死亡 → `systemctl stop bird` 撤回 BGP 路由 → **全网自动回落直连**；此后每 5 分钟试探恢复（临时拉起 bird 探测，成功则切回代理模式）。
+
+部署（`/opt/watchdog` 目录）：
+
+```
+mkdir -p /opt/watchdog
+cp Shellscript/proxy_watchdog.sh /opt/watchdog/ && chmod +x /opt/watchdog/proxy_watchdog.sh
+cp Shellscript/proxy_watchdog.service /etc/systemd/system/
+cp Shellscript/proxy_watchdog.logrotate /etc/logrotate.d/proxy_watchdog
+systemctl daemon-reload && systemctl enable --now proxy_watchdog
+```
+
+日志与故障历史：
+
+- `/opt/watchdog/watchdog.log`：实时运行日志（logrotate 每周轮转），也可 `journalctl -t proxy_watchdog -f`；
+- `/opt/watchdog/events.log`：**故障台账**，只增不减，一行一条记录故障发生/恢复时刻与持续时长：
+
+```
+EMERGENCY 2026-10-03T18:40:12+0800 代理链路死亡（连续3次国外探针失败）
+RECOVER   2026-10-03T19:15:47+0800 紧急模式持续了 35分35秒
+```
+
+已知限制：紧急模式下 gfw 名单内站点仍不可达（直连被墙，物理限制）；未缓存国外域名的解析由 `dns_foreign` 国内兜底接管（见 2.2）。
 ---
 
 ## 3. RouterOS 配置
@@ -239,10 +269,15 @@ add as=65001 name=bird router-id=$local_ipv4_addr routing-table=main
 
 ## 建立 BGP 邻居会话
 /routing bgp connection
-# IPv4 会话：10.0.0.1 <-> 10.0.0.2
-add afi=ip hold-time=30s input.filter=bird-v4-in instance=bird keepalive-time=10s local.address=$local_ipv4_addr .role=ebgp name=bird-v4 remote.address=$gateway_ipv4_addr .as=65002 routing-table=main
+# IPv4 会话：10.0.0.1 <-> 10.0.0.2；use-bfd=yes 启用 BFD 亚秒级故障检测（注意参数名是 use-bfd，短名 bfd 不被接受）
+add afi=ip hold-time=30s input.filter=bird-v4-in instance=bird keepalive-time=10s local.address=$local_ipv4_addr .role=ebgp name=bird-v4 remote.address=$gateway_ipv4_addr .as=65002 routing-table=main use-bfd=yes
 # IPv6 会话：fd00::1 <-> fd00::2
-add afi=ipv6 hold-time=30s input.filter=bird-v6-in instance=bird keepalive-time=10s local.address=$local_ipv6_addr .role=ebgp name=bird-v6 remote.address=$gateway_ipv6_addr .as=65002 routing-table=main
+add afi=ipv6 hold-time=30s input.filter=bird-v6-in instance=bird keepalive-time=10s local.address=$local_ipv6_addr .role=ebgp name=bird-v6 remote.address=$gateway_ipv6_addr .as=65002 routing-table=main use-bfd=yes
+
+## BFD 配置
+# RouterOS 默认禁止一切 BFD 会话（未显式允许的接口报 "BFD forbidden for interface"），必须先放行内网网桥
+# 参数与 Debian Bird 侧对称（100ms × multiplier 3 ≈ 300ms 检测窗口）
+/routing bfd configuration add interfaces=$interface_name min-rx=100ms min-tx=100ms multiplier=3 comment=Gateway
 
 ## BGP 入方向路由过滤规则
 # 拒绝默认路由，其余全部接收

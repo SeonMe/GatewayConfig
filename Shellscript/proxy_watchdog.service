@@ -1,0 +1,13 @@
+[Unit]
+Description=Proxy health watchdog - BGP fallback controller
+After=network-online.target bird.service dae.service mosdns.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/watchdog/proxy_watchdog.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
